@@ -4,6 +4,8 @@ require('dotenv').config({ path: join(__dirname, '../.env') });
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
+import * as https from 'https';
+import * as fs from 'fs';
 
 import { PollAuctionHouse } from './api/api';
 import { GetAccessToken } from './api/bnet';
@@ -22,6 +24,13 @@ import { Op } from 'sequelize';
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+const key = fs.readFileSync(`${process.env.KEY_LOC}`);
+const cert = fs.readFileSync(`${process.env.CERT_LOC}`);
+const options = {
+  key: key,
+  cert: cert
+}
+const server = https.createServer(options, app);
 
 export let accessToken = '';
 
@@ -75,7 +84,7 @@ const startServer = async () => {
       logger.error('Failed to poll auctions');
     }
   }, 1000 * 60 * 60 * 3); // every 3 hours
-  app.listen(process.env.API_PORT, () => {
+  server.listen(process.env.API_PORT, () => {
     console.log(`API endpoints listening on ${process.env.API_PORT}`);
   });
 
