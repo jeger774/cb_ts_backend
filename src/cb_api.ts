@@ -50,6 +50,23 @@ const realmsTw = [
 const factions = [2, 6]
 const regions = ['eu', 'us', 'kr', 'tw']
 
+const fetchData = async (query: string) => {
+  try {
+    const response = await fetch(
+      `https://www.wowhead.com/item=${query}&xml`
+    );
+    const xml = await response.text();
+    const jsonString = xml.split('<json>')[1].split('</json>')[0]
+    if (!jsonString) return null;
+    const json = `{${jsonString.split('<![CDATA[')[1].split(']]>')[0]}}`;
+    const itemId = JSON.parse(json).id;
+    return itemId ?? null;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
 const startServer = async () => {
   dbConnect();
   Summary.sync();
@@ -116,38 +133,47 @@ const startServer = async () => {
 app.get('/items', async (req, res) => {
   const region = req.query['region'];
   const days = req.query['days'];
-  const id = req.query['id'];
+  const itemName = req.query['itemName'];
   const realmId = req.query['realm'];
   const faction = req.query['faction'];
 
   if (!days || typeof days !== 'string' || !parseInt(days)
-      || !id || typeof id !== 'string' || !parseInt(id)
+      || !itemName || typeof itemName !== 'string'
       || !realmId || typeof realmId !== 'string' || !parseInt(realmId)
       || !faction || typeof faction !== 'string' || !parseInt(faction)
       || !region || typeof region !== 'string') {
     return res.status(400).send();
   } 
 
-  const result = await GetItemsByItemId({ days: parseInt(days), itemId: parseInt(id), realmId: parseInt(realmId), faction: parseInt(faction), region: region });
+  const itemId = await fetchData(itemName);
+  if (itemId === null) {
+    return res.status(400).send();
+  }
+  const result = await GetItemsByItemId({ days: parseInt(days), itemId, realmId: parseInt(realmId), faction: parseInt(faction), region: region });
   return res.json(result);
 });
 
 app.get('/item', async (req, res) => {
   const region = req.query['region'];
   const days = req.query['days'];
-  const id = req.query['id'];
+  const itemName = req.query['itemName'];
   const realmId = req.query['realm'];
   const faction = req.query['faction'];
 
   if (!days || typeof days !== 'string' || !parseInt(days)
-      || !id || typeof id !== 'string' || !parseInt(id)
+      || !itemName || typeof itemName !== 'string'
       || !realmId || typeof realmId !== 'string' || !parseInt(realmId)
       || !faction || typeof faction !== 'string' || !parseInt(faction)
       || !region || typeof region !== 'string') {
     return res.status(400).send();
-  } 
+  }
+  
+  const itemId = await fetchData(itemName);
+  if (itemId === null) {
+    return res.status(400).send();
+  }
 
-  const result = await GetItemTrends({ days: parseInt(days), itemId: parseInt(id), realmId: parseInt(realmId), faction: parseInt(faction), region: region });
+  const result = await GetItemTrends({ days: parseInt(days), itemId, realmId: parseInt(realmId), faction: parseInt(faction), region: region });
   return res.json(result);
 });
 
