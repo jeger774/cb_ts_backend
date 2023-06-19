@@ -20,6 +20,7 @@ import { Item } from './db/models/Item';
 import { GetItemsByItemId } from './queries/getItem';
 import cron from 'node-cron';
 import { Op } from 'sequelize';
+import { DOMParser } from 'xmldom';
 
 const app = express();
 app.use(cors());
@@ -42,7 +43,7 @@ const realmsUs = [
   4384, 4385, 4387, 4388, 4408, 4726, 4727, 4728, 4800
 ];
 const realmsKr = [
-  4417, 4419, 4420, 4421, 4840
+  4417, 4419, 4420, 4840
 ];
 const realmsTw = [
   4485, 4487, 5740, 5741
@@ -50,17 +51,23 @@ const realmsTw = [
 const factions = [2, 6]
 const regions = ['eu', 'us', 'kr', 'tw']
 
-const fetchData = async (query: string) => {
+const fetchItemDetails = async (query: string) => {
   try {
     const response = await fetch(
       `https://www.wowhead.com/item=${query}&xml`
     );
     const xml = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, 'text/xml');
     const jsonString = xml.split('<json>')[1].split('</json>')[0]
     if (!jsonString) return null;
     const json = `{${jsonString.split('<![CDATA[')[1].split(']]>')[0]}}`;
-    const itemId = JSON.parse(json).id;
-    return itemId ?? null;
+    const parsed = JSON.parse(json);
+    const itemId = parsed.id;
+    const extractedName = parsed.name;
+    const extractedQuality = parsed.quality;
+    const extractedIcon = doc.getElementsByTagName('icon')[0].textContent;
+    return [itemId, extractedName, extractedQuality, extractedIcon] ?? null;
   } catch (error) {
     console.log(error);
     return null;
@@ -145,12 +152,19 @@ app.get('/items', async (req, res) => {
     return res.status(400).send();
   } 
 
-  const itemId = await fetchData(itemName);
-  if (itemId === null) {
+  const itemDetails = await fetchItemDetails(itemName);
+  if (itemDetails === null) {
     return res.status(400).send();
   }
+  const [itemId, extractedName, extractedQuality, extractedIcon] = itemDetails;
   const result = await GetItemsByItemId({ days: parseInt(days), itemId, realmId: parseInt(realmId), faction: parseInt(faction), region: region });
-  return res.json(result);
+  const resultWithExtracts = result.map((entry) => ({
+    ...entry.get({ plain: true }),
+    extractedName,
+    extractedQuality,
+    extractedIcon
+  }));
+  return res.json(resultWithExtracts);
 });
 
 app.get('/item', async (req, res) => {
@@ -168,11 +182,11 @@ app.get('/item', async (req, res) => {
     return res.status(400).send();
   }
   
-  const itemId = await fetchData(itemName);
-  if (itemId === null) {
+  const itemDetails = await fetchItemDetails(itemName);
+  if (itemDetails === null) {
     return res.status(400).send();
   }
-
+  const [itemId, extractedName, extractedQuality, extractedIcon] = itemDetails;
   const result = await GetItemTrends({ days: parseInt(days), itemId, realmId: parseInt(realmId), faction: parseInt(faction), region: region });
   return res.json(result);
 });
